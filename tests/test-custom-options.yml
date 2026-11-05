@@ -1,0 +1,42 @@
+name: Test custom rendering options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          report-file: tests/fixtures/report.json
+          create-comment: 'false'
+          comment-title: 'My E2E Results'
+          custom-info: 'Environment staging'
+          report-url: 'https://example.com/report/index.html'
+          icon-style: emojis
+          test-command: 'npx playwright test'
+          footer: 'Custom footer text'
+          sections: 'passed, failed'
+      - name: Assert summary content
+        env:
+          SUMMARY: ${{ steps.action.outputs.summary }}
+        run: |
+          echo "$SUMMARY"
+          fail=0
+          for needle in "### My E2E Results" "Environment staging" "https://example.com/report/index.html" \
+                        "Open report" "❌" "✅" "npx playwright test" "Custom footer text" \
+                        "Passed tests" "Failed tests" "logs in"; do
+            if ! printf '%s' "$SUMMARY" | grep -qF -- "$needle"; then
+              echo "FAIL: summary missing '$needle'"
+              fail=1
+            fi
+          done
+          for absent in "Flaky tests" "Skipped tests" "icongr.am" "### Playwright test results"; do
+            if printf '%s' "$SUMMARY" | grep -qF -- "$absent"; then
+              echo "FAIL: summary should not contain '$absent'"
+              fail=1
+            fi
+          done
+          [ "$fail" = 0 ] || exit 1
+          echo "PASS"

@@ -1,0 +1,51 @@
+name: Test basic summary rendering
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          report-file: tests/fixtures/report.json
+          create-comment: 'false'
+      - name: Assert summary content
+        env:
+          SUMMARY: ${{ steps.action.outputs.summary }}
+        run: |
+          echo "$SUMMARY"
+          fail=0
+          for needle in "### Playwright test results" "**1 failed**" "**2 passed**" "**1 flaky**" "**1 skipped**" \
+                        "5 tests across 2 suites" "#### Details" "Failed tests" "Flaky tests" "Skipped tests" \
+                        "shows error" "https://icongr.am/octicons/"; do
+            if ! printf '%s' "$SUMMARY" | grep -qF -- "$needle"; then
+              echo "FAIL: summary missing '$needle'"
+              fail=1
+            fi
+          done
+          if printf '%s' "$SUMMARY" | grep -qF "Passed tests"; then
+            echo "FAIL: Passed tests section should not be rendered by default"
+            fail=1
+          fi
+          [ "$fail" = 0 ] || exit 1
+          echo "PASS"
+      - name: Assert report-data and comment-id
+        env:
+          DATA: ${{ steps.action.outputs.report-data }}
+          COMMENT_ID: ${{ steps.action.outputs.comment-id }}
+        run: |
+          echo "report-data: $DATA"
+          echo "comment-id: '$COMMENT_ID'"
+          for needle in '"version":"1.40.0"' '"workers":2' '"projects":["chromium"]' 'shows error' 'removes item'; do
+            if ! printf '%s' "$DATA" | grep -qF -- "$needle"; then
+              echo "FAIL: report-data missing '$needle'"
+              exit 1
+            fi
+          done
+          if [ -n "$COMMENT_ID" ]; then
+            echo "FAIL: comment-id should be empty when create-comment is false"
+            exit 1
+          fi
+          echo "PASS"

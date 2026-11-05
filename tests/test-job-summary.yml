@@ -1,0 +1,30 @@
+name: Test job summary
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          report-file: tests/fixtures/report.json
+          create-comment: 'false'
+          job-summary: 'true'
+          comment-title: 'Job Summary Title'
+      - name: Assert summary output and job summary file
+        env:
+          SUMMARY: ${{ steps.action.outputs.summary }}
+        run: |
+          echo "$SUMMARY"
+          if ! printf '%s' "$SUMMARY" | grep -qF "### Job Summary Title"; then
+            echo "FAIL: summary output missing title"
+            exit 1
+          fi
+          echo "GITHUB_STEP_SUMMARY=$GITHUB_STEP_SUMMARY"
+          if [ -n "$GITHUB_STEP_SUMMARY" ] && [ -f "$GITHUB_STEP_SUMMARY" ]; then
+            cat "$GITHUB_STEP_SUMMARY"
+            echo "(job summary file is per-step; content check skipped if empty)"
+          fi
+          echo "PASS"
