@@ -1,0 +1,61 @@
+name: Test basic usage
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          report-file: tests/fixtures/report.json
+      - name: Assert summary content
+        env:
+          SUMMARY: ${{ steps.action.outputs.summary }}
+        run: |
+          echo "summary:"
+          echo "$SUMMARY"
+          fail=0
+          for needle in "### Playwright test results" "**1 failed**" "**2 passed**" "**1 flaky**" "**1 skipped**" "5 tests across 1 suite" "12.3 seconds" "Failed tests" "Flaky tests" "Skipped tests" "fails one"; do
+            if ! printf '%s' "$SUMMARY" | grep -qF -- "$needle"; then
+              echo "FAIL: summary missing '$needle'"
+              fail=1
+            fi
+          done
+          if printf '%s' "$SUMMARY" | grep -qF "Passed tests"; then
+            echo "FAIL: Passed tests section should not be rendered by default"
+            fail=1
+          fi
+          if printf '%s' "$SUMMARY" | grep -qF "<details open><summary><strong>Flaky"; then
+            echo "FAIL: flaky section should be collapsed by default"
+            fail=1
+          fi
+          [ $fail -eq 0 ] || exit 1
+          echo "PASS"
+      - name: Assert report-data
+        env:
+          DATA: ${{ steps.action.outputs.report-data }}
+        run: |
+          echo "$DATA" | head -c 2000; echo
+          ver=$(printf '%s' "$DATA" | jq -r '.version')
+          tests=$(printf '%s' "$DATA" | jq '.tests | length')
+          failed=$(printf '%s' "$DATA" | jq '.failed | length')
+          passed=$(printf '%s' "$DATA" | jq '.passed | length')
+          workers=$(printf '%s' "$DATA" | jq '.workers')
+          echo "version=$ver tests=$tests failed=$failed passed=$passed workers=$workers"
+          if [ "$ver" != "1.40.0" ] || [ "$tests" != "5" ] || [ "$failed" != "1" ] || [ "$passed" != "2" ] || [ "$workers" != "2" ]; then
+            echo "FAIL: unexpected report-data"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert no comment created (no PR context)
+        env:
+          COMMENT_ID: ${{ steps.action.outputs.comment-id }}
+        run: |
+          echo "comment-id: '$COMMENT_ID'"
+          if [ -n "$COMMENT_ID" ]; then
+            echo "FAIL: expected empty comment-id"
+            exit 1
+          fi
+          echo "PASS"

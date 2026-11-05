@@ -1,0 +1,25 @@
+name: Test job summary enabled
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          report-file: tests/fixtures/report.json
+          job-summary: 'true'
+          create-comment: 'false'
+          comment-title: 'Job Summary Title'
+      - name: Assert summary output
+        env:
+          SUMMARY: ${{ steps.action.outputs.summary }}
+        run: |
+          echo "$SUMMARY"
+          if ! printf '%s' "$SUMMARY" | grep -qF "### Job Summary Title"; then
+            echo "FAIL: summary missing title"
+            exit 1
+          fi
+          echo "PASS"

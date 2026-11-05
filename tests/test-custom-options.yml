@@ -1,0 +1,57 @@
+name: Test custom rendering options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          report-file: tests/fixtures/report.json
+          create-comment: 'false'
+          comment-title: 'My Custom Title'
+          custom-info: 'Extra info here'
+          report-url: 'https://example.com/report/index.html'
+          test-command: 'npx playwright test'
+          footer: 'Custom footer text'
+          sections: 'passed, -failed'
+          icon-style: emoji
+      - name: Assert summary content
+        env:
+          SUMMARY: ${{ steps.action.outputs.summary }}
+        run: |
+          echo "summary:"
+          echo "$SUMMARY"
+          fail=0
+          for needle in "### My Custom Title" "Extra info here" "[Open report" "https://example.com/report/index.html" "Custom footer text" "Passed tests" "Failed tests" "npx playwright test example.spec.ts:10" "<details open><summary><strong>Passed tests" "<details ><summary><strong>Failed tests"; do
+            if ! printf '%s' "$SUMMARY" | grep -qF -- "$needle"; then
+              echo "FAIL: summary missing '$needle'"
+              fail=1
+            fi
+          done
+          for absent in "Playwright test results" "Flaky tests" "Skipped tests"; do
+            if printf '%s' "$SUMMARY" | grep -qF -- "$absent"; then
+              echo "FAIL: summary should not contain '$absent'"
+              fail=1
+            fi
+          done
+          last=$(printf '%s' "$SUMMARY" | tail -n 1)
+          echo "last line: $last"
+          if [ "$last" != "Custom footer text" ]; then
+            echo "FAIL: footer should be the last line"
+            fail=1
+          fi
+          [ $fail -eq 0 ] || exit 1
+          echo "PASS"
+      - name: Assert no comment id
+        env:
+          COMMENT_ID: ${{ steps.action.outputs.comment-id }}
+        run: |
+          echo "comment-id: '$COMMENT_ID'"
+          if [ -n "$COMMENT_ID" ]; then
+            echo "FAIL: expected empty comment-id"
+            exit 1
+          fi
+          echo "PASS"
